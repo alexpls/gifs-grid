@@ -1,0 +1,14 @@
+[Unit]
+Description=GIFs Web Server
+After=network.target
+
+[Service]
+Type=simple
+User=alex
+WorkingDirectory=/opt/gifs
+ExecStart=/opt/gifs/gifs-server
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

@@ -1,3 +1,4 @@
+const fps = 60
 const gifHeight = 60
 const padding = 8
 const panSpeed = 0.5 // px per frame
@@ -60,7 +61,7 @@ function initializeStars() {
 }
 
 function setup() {
-  frameRate(60)
+  frameRate(fps)
   createCanvas(windowWidth, windowHeight, WEBGL)
 
   const params = getURLParams()
@@ -104,7 +105,7 @@ function draw() {
   grid.rows.forEach((row, rowIdx) => {
     const rowPanX = panX * row.speedMul
 
-    if (rowWidth(row) < (width + rowPanX)) {
+    if (row.offsetX + rowWidth(row) < (width + rowPanX)) {
       rowLoadNextCell(row)
       rowRemoveOffscreenCells(row, rowPanX)
     }
@@ -214,6 +215,12 @@ function makeCell(url, height, onSkip, onLoad, onError) {
 
   // skip 50% of "sign my guestbook" gifs
   if (url.includes("guestbook") && random() > 0.5) {
+    onSkip()
+    return
+  }
+
+  // skip 50% of "new" gifs
+  if (url.includes("new") && random() > 0.5) {
     onSkip()
     return
   }

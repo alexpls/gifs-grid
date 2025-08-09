@@ -1,5 +1,6 @@
 const fps = 60
 const gifHeight = 60
+const maxWidth = 1920
 const padding = 8
 const panSpeed = 0.5 // px per frame
 
@@ -19,27 +20,52 @@ const maxStars = 2000
 let stars = []
 
 let crt
+let renderBuffer
 
 function preload() {
   const params = getURLParams()
   let safe = true
   if (params.safe === "no") {
-    safe = false
+    safe = false // loads gifs image classifiers think are nsfw
   }
+
+  // TODO: load gif urls in chunks rather than all at once, or...
+  // rethink gif loading to avoid having to load these URLs upfront at all.
+  // We could call an API like "api/random_gif" and get redirected
+  // to a gif url of the backend's choosing. That'd let us move some
+  // skipping logic serverside and if we get redirected to canonical URL
+  // could still take advantage of CDN caching.
   gifsData = loadJSON(`/api/gifs?n=10000&safe=${safe ? 'yes' : 'no'}`)
+}
+
+function initRenderBuffer() {
+  // constrain width - if we show too many gifs at once
+  // we run into perf issues and need to call lambo to borrow
+  // his 5090.
+  const bw = min(windowWidth, maxWidth)
+  const s = windowWidth / bw
+  const bh = Math.floor(windowHeight / s)
+  renderBuffer = createGraphics(bw, bh, WEBGL)
+  renderBuffer.pixelDensity(1) // TODO: be nicer to high dpi screens?
+
+  const params = getURLParams()
+  if (params.shader !== 'no') {
+    crt = renderBuffer.createFilterShader(crtShaderSrc)
+  }
 }
 
 function initializeGrid() {
   grid.rows = []
   totalRowsHeight = 0
 
-  while (totalRowsHeight < height) {
+  const targetHeight = renderBuffer.height
+  while (totalRowsHeight < targetHeight) {
     const rowHeight = gifHeight + random(0, 50)
     totalRowsHeight += rowHeight + padding
     grid.rows.push(makeRow(rowHeight))
   }
   totalRowsHeight -= padding
-  gridOffsetY = (height - totalRowsHeight) / 2
+  gridOffsetY = (targetHeight - totalRowsHeight) / 2
 
   console.log('grid initialized', { numRows: grid.rows.length })
 }
@@ -47,11 +73,14 @@ function initializeGrid() {
 function initializeStars() {
   stars = []
 
-  const numStars = Math.floor(Math.min((height * width) / starDensity, maxStars))
+  const targetWidth = renderBuffer.width
+  const targetHeight = renderBuffer.height
+
+  const numStars = Math.floor(Math.min((targetHeight * targetWidth) / starDensity, maxStars))
   for (let i = 0; i < numStars; i++) {
     stars.push({
-      x: random(-width / 2, width / 2),
-      y: random(-height / 2, height / 2),
+      x: random(-targetWidth / 2, targetWidth / 2),
+      y: random(-targetHeight / 2, targetHeight / 2),
       size: random(0.5, 3),
       speed: random(0.1, 0.5)
     })
@@ -62,19 +91,17 @@ function initializeStars() {
 
 function setup() {
   frameRate(fps)
-  createCanvas(windowWidth, windowHeight, WEBGL)
+  createCanvas(windowWidth, windowHeight)
 
-  const params = getURLParams()
-  if (params.shader !== 'no') {
-    crt = createFilterShader(crtShaderSrc)
-  }
-
+  initRenderBuffer()
   initializeGrid()
   initializeStars()
 }
 
 function windowResized() {
   resizeCanvas(windowWidth, windowHeight)
+
+  initRenderBuffer()
   initializeGrid()
   initializeStars()
 }
@@ -82,30 +109,30 @@ function windowResized() {
 function draw() {
   panX += panSpeed
 
-  background('black')
+  renderBuffer.background('black')
 
   // stars
-  push()
-  stroke(255, 255, 255, 150)
-  strokeWeight(2)
-  beginShape(POINTS)
+  renderBuffer.push()
+  renderBuffer.stroke(255, 255, 255, 150)
+  renderBuffer.strokeWeight(2)
+  renderBuffer.beginShape(POINTS)
   stars.forEach(star => {
     star.x -= star.speed
 
-    if (star.x < -width / 2) {
-      star.x = width / 2
-      star.y = random(-height / 2, height / 2)
+    if (star.x < -renderBuffer.width / 2) {
+      star.x = renderBuffer.width / 2
+      star.y = random(-renderBuffer.height / 2, renderBuffer.height / 2)
     }
 
-    vertex(star.x, star.y)
+    renderBuffer.vertex(star.x, star.y)
   })
-  endShape()
-  pop()
+  renderBuffer.endShape()
+  renderBuffer.pop()
 
   grid.rows.forEach((row, rowIdx) => {
     const rowPanX = panX * row.speedMul
 
-    if (row.offsetX + rowWidth(row) < (width + rowPanX)) {
+    if (row.offsetX + rowWidth(row) < (renderBuffer.width + rowPanX)) {
       rowLoadNextCell(row)
       rowRemoveOffscreenCells(row, rowPanX)
     }
@@ -117,27 +144,35 @@ function draw() {
       y += grid.rows[i].height + padding
     }
 
-    push()
-    translate(-rowPanX - (width / 2), gridOffsetY - (height / 2))
+    renderBuffer.push()
+    renderBuffer.translate(-rowPanX - (renderBuffer.width / 2), gridOffsetY - (renderBuffer.height / 2))
     row.cells.forEach(cell => {
       if (cell.loadTime) {
         const elapsed = millis() - cell.loadTime
         cell.opacity = min(255, (elapsed / 200) * 255)
       }
 
-      push()
-      tint(255, cell.opacity)
-      image(cell.img, row.offsetX + x, y, cell.width, cell.height)
-      pop()
+      // perf: stop drawing tint once cell opaque
+      renderBuffer.push()
+      renderBuffer.tint(255, cell.opacity)
+      renderBuffer.image(cell.img, row.offsetX + x, y, cell.width, cell.height)
+      renderBuffer.pop()
 
       x += cell.width + padding
     })
-    pop()
+    renderBuffer.pop()
   })
 
   if (crt) {
-    filter(crt)
+    renderBuffer.filter(crt)
   }
+
+  // draw the scaled buffer back to the main canvas
+  // perf: scaling on the main canvas and avoiding buffer
+  // altogether would save an expensive draw. hmm...
+  background('black')
+  imageMode(CORNER)
+  image(renderBuffer, 0, 0, width, height)
 }
 
 function rowRemoveOffscreenCells(row, rowPanX) {

@@ -21,8 +21,8 @@ def get_gif_frame_hashes(filepath, sample_frames=5):
 
 
 def find_and_move_duplicates():
-    gif_dir = Path("gifcities")
-    duplicates_dir = Path("gifcities/duplicates")
+    gif_dir = Path("gifs")
+    duplicates_dir = Path("gifs/duplicates")
     
     duplicates_dir.mkdir(exist_ok=True)
     

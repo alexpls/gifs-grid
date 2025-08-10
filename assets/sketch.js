@@ -204,6 +204,10 @@ function rowLoadNextCell(row) {
   }
 
   const gif = random(gifsData.urls)
+  if (!gif) {
+    return // the backend didn't return any gifs
+  }
+
   row.loadingCell = makeCell(
     gif,
     row.height,

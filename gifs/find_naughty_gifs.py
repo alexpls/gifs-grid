@@ -78,4 +78,4 @@ def process_gifs(input_dir, threshold=0.4):
     print(f"\nComplete! Moved {moved_count} NSFW files to {nsfw_dir}")
 
 if __name__ == "__main__":
-    process_gifs("gifcities")
+    process_gifs("gifs")

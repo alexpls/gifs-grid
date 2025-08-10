@@ -1,6 +1,6 @@
 #!/bin/bash
 
-GIFCITIES_DIR="gifcities"
+GIFCITIES_DIR="gifs"
 mkdir -p "$GIFCITIES_DIR"
 
 KEYWORDS=(

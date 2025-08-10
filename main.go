@@ -31,7 +31,7 @@ type Data struct {
 	gifs []*GifPath
 }
 
-const GifsDir = "gifs/gifcities"
+const GifsDir = "gifs/gifs"
 
 //go:embed index.html
 //go:embed assets/*
